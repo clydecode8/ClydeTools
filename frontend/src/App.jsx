@@ -77,13 +77,13 @@ const TOOLS = {
   //   icon: Trash2,
   //   enabled: false,
   // },
-  youtube: {
-    title: "YouTube Downloader",
-    description: "Download permitted videos as MP4 or MP3",
-    pageTitle: "Download video or audio",
-    icon: Download,
-    enabled: true,
-  }
+  // youtube: {
+  //   title: "YouTube Downloader",
+  //   description: "Download permitted videos as MP4 or MP3",
+  //   pageTitle: "Download video or audio",
+  //   icon: Download,
+  //   enabled: true,
+  // }
 };
 
 function validateFile(file, activeTool) {

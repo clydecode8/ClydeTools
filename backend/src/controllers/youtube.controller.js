@@ -10,6 +10,20 @@ fs.mkdirSync(runtimeDirectory, {
   recursive: true,
 });
 
+const cookiesPath =
+  process.env.YOUTUBE_COOKIES_PATH ||
+  "/etc/secrets/youtube-cookies.txt";
+
+console.log("Cookie path:", cookiesPath);
+console.log("Cookie file exists:", fs.existsSync(cookiesPath));
+
+if (fs.existsSync(cookiesPath)) {
+  console.log(
+    "Cookie file size:",
+    fs.statSync(cookiesPath).size
+  );
+}
+
 /*
 Temporary in-memory job storage.
 
@@ -177,6 +191,10 @@ async function processJob(job) {
     jsRuntimes: "node",
     remoteComponents: "ejs:github",
   };
+
+  if (fs.existsSync(cookiesPath)) {
+    options.cookies = cookiesPath;
+  }
 
   const options =
     job.format === "mp3"
