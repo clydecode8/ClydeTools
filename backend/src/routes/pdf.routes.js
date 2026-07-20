@@ -1,9 +1,19 @@
 import { Router } from "express";
-import { createJob, uploadFiles } from "../middleware/upload.js";
-import { combinePdfController } from "../controllers/pdf.controller.js";
+
+import {
+  uploadFiles,
+} from "../services/fileValidation.service.js";
+
+import {
+  mergePdfController,
+} from "../controllers/pdf.controller.js";
 
 const router = Router();
 
-router.post("/combine", createJob, uploadFiles, combinePdfController);
+router.post(
+  "/merge-memory",
+  uploadFiles,
+  mergePdfController
+);
 
 export default router;

@@ -1,25 +1,33 @@
-import path from "path";
-import { validateUploadedFiles } from "../services/fileValidation.service.js";
-import { combineToPdf } from "../services/pdf.service.js";
-import { removeJobDir } from "../services/cleanup.service.js";
+import {
+  validateUploadedFiles,
+} from "../services/fileValidation.service.js";
 
-export async function combinePdfController(req, res, next) {
+import {
+  mergePdfBuffers,
+} from "../services/pdf.service.js";
+
+export async function mergePdfController(req, res, next) {
   try {
-    const files = await validateUploadedFiles(req.files);
+    const files = await validateUploadedFiles(req.files, [
+      "application/pdf",
+    ]);
 
-    const outputPath = path.join(req.jobDir, "clydetools-output.pdf");
+    const outputBuffer = await mergePdfBuffers(files);
 
-    await combineToPdf(files, outputPath);
+    res.setHeader("Content-Type", "application/pdf");
 
-    res.download(outputPath, "clydetools-output.pdf", async (error) => {
-      await removeJobDir(req.jobDir);
+    res.setHeader(
+      "Content-Disposition",
+      'attachment; filename="clydetools-merged.pdf"'
+    );
 
-      if (error && !res.headersSent) {
-        next(error);
-      }
-    });
+    res.setHeader(
+      "Content-Length",
+      String(outputBuffer.length)
+    );
+
+    res.status(200).send(outputBuffer);
   } catch (error) {
-    await removeJobDir(req.jobDir);
     next(error);
   }
 }
