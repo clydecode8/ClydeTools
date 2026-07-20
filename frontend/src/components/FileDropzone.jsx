@@ -1,9 +1,8 @@
 import React from "react";
-import { Upload } from "lucide-react";
+import { Download } from "lucide-react";
 
 export default function FileDropzone({
   title,
-  browseLabel,
   spec,
   accept,
   inputRef,
@@ -38,10 +37,9 @@ export default function FileDropzone({
         if (event.key === "Enter" || event.key === " ") inputRef.current?.click();
       }}
     >
-      <div className="drop-icon"><Upload size={23} /></div>
+      <div className="drop-icon"><Download size={25} /></div>
       <div className="drop-title">{title}</div>
-      <div className="drop-or">— or —</div>
-      <button className="choose-btn" type="button" tabIndex={-1}>{browseLabel}</button>
+      <div className="drop-copy">or <span>browse from your device</span></div>
       <div className="drop-spec">{spec}</div>
       <input
         ref={inputRef}
