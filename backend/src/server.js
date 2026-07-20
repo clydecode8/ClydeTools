@@ -8,7 +8,7 @@ import { apiRateLimiter } from "./middleware/rateLimiter.js";
 
 const app = express();
 const PORT = process.env.PORT || 5000;
-const FRONTEND_ORIGIN = process.env.FRONTEND_ORIGIN || "http://localhost:5173";
+const allowedOrigins = ["http://localhost:5173", process.env.FRONTEND_ORIGIN].filter(Boolean);
 
 app.set("trust proxy", 1);
 
@@ -18,7 +18,27 @@ app.use(
   })
 );
 
-app.use(cors({ origin: FRONTEND_ORIGIN }));
+app.use(
+  cors({
+    origin(origin, callback) {
+
+      // Allow requests without an Origin header
+      if (!origin) {
+        return callback(null, true);
+      }
+
+      if (allowedOrigins.includes(origin)) {
+        return callback(null, true);
+      }
+
+      return callback(
+        new Error(`Origin ${origin} is not allowed by CORS.`)
+      );
+    },
+    credentials: false,
+  })
+);
+
 app.use(express.json({ limit: "100kb" }));
 
 app.get("/health", (_req, res) => {
@@ -64,6 +84,13 @@ app.use((error, _req, res, _next) => {
   });
 });
 
-app.listen(PORT, () => {
+app.get("/api/health", (req, res) => {
+  res.status(200).json({
+    status: "ok",
+    service: "ClydeTools backend",
+  });
+});
+
+app.listen(PORT, "0.0.0.0", () => {
   console.log(`ClydeTools API running on http://localhost:${PORT}`);
 });
