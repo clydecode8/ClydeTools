@@ -174,6 +174,8 @@ async function processJob(job) {
     newline: true,
     ffmpegLocation: ffmpegPath,
     output: outputTemplate,
+    jsRuntimes: "node",
+    remoteComponents: "ejs:github",
   };
 
   const options =
