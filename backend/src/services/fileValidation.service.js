@@ -1,61 +1,64 @@
 import multer from "multer";
-import fs from "fs/promises";
-import path from "path";
-import crypto from "crypto";
-import { getJobDir } from "../utils/paths.js";
+import { fileTypeFromBuffer } from "file-type";
 
-const maxFiles = Number(process.env.MAX_FILES || 10);
-const maxFileMb = Number(process.env.MAX_FILE_MB || 10);
-
-const allowedMimeTypes = new Set([
-  "application/pdf",
-  "image/jpeg",
-  "image/png",
-  "image/webp",
-]);
-
-const allowedExtensions = new Set([".pdf", ".jpg", ".jpeg", ".png", ".webp"]);
-
-export async function createJob(req, _res, next) {
-  try {
-    req.jobId = crypto.randomUUID();
-    req.jobDir = getJobDir(req.jobId);
-    await fs.mkdir(req.jobDir, { recursive: true });
-    next();
-  } catch (error) {
-    next(error);
-  }
-}
-
-const storage = multer.diskStorage({
-  destination: (req, _file, cb) => {
-    cb(null, req.jobDir);
-  },
-
-  filename: (_req, file, cb) => {
-    const ext = path.extname(file.originalname).toLowerCase();
-
-    if (!allowedExtensions.has(ext)) {
-      return cb(new Error("Invalid file extension."));
-    }
-
-    cb(null, `${crypto.randomUUID()}${ext}`);
-  },
-});
-
-function fileFilter(_req, file, cb) {
-  if (!allowedMimeTypes.has(file.mimetype)) {
-    return cb(new Error("Invalid file type."));
-  }
-
-  cb(null, true);
-}
+const MAX_FILE_SIZE = 15 * 1024 * 1024;
+const MAX_FILES = 10;
 
 export const uploadFiles = multer({
-  storage,
-  fileFilter,
+  storage: multer.memoryStorage(),
+
   limits: {
-    files: maxFiles,
-    fileSize: maxFileMb * 1024 * 1024,
+    files: MAX_FILES,
+    fileSize: MAX_FILE_SIZE,
+    fields: 5,
   },
-}).array("files", maxFiles);
+}).array("files", MAX_FILES);
+
+export async function validateUploadedFiles(
+  files,
+  allowedMimeTypes
+) {
+  if (!files?.length) {
+    const error = new Error("No files were uploaded.");
+    error.statusCode = 400;
+    throw error;
+  }
+
+  const validatedFiles = [];
+
+  for (const file of files) {
+    const detectedType = await fileTypeFromBuffer(file.buffer);
+
+    if (!detectedType) {
+      const error = new Error(
+        `${file.originalname} has an unknown file type.`
+      );
+      error.statusCode = 400;
+      throw error;
+    }
+
+    if (!allowedMimeTypes.includes(detectedType.mime)) {
+      const error = new Error(
+        `${file.originalname} is not an allowed file type.`
+      );
+      error.statusCode = 400;
+      throw error;
+    }
+
+    validatedFiles.push({
+      ...file,
+      detectedMime: detectedType.mime,
+      detectedExtension: detectedType.ext,
+    });
+  }
+
+  return validatedFiles;
+}
+
+export function isImage(mimeType) {
+  return mimeType?.startsWith("image/");
+}
+
+export function isPdf(mimeType) {
+  return mimeType === "application/pdf";
+}

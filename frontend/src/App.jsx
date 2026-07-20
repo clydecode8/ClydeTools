@@ -1,56 +1,94 @@
 import React, { useMemo, useRef, useState } from "react";
-import { Download, Loader2, ShieldCheck } from "lucide-react";
+import {
+  Check,
+  Download,
+  FileImage,
+  Files,
+  FileText,
+  Loader2,
+  Mail,
+  Phone,
+  RotateCw,
+  ShieldCheck,
+  Trash2,
+  Upload,
+  X,
+  Minimize2,
+} from "lucide-react";
 import FileDropzone from "./components/FileDropzone.jsx";
 import FileList from "./components/FileList.jsx";
+import {
+  mergePdfsInBrowser,
+  imagesToPdfInBrowser,
+} from "./services/browserPdf.service.js";
+import YoutubeDownloader from "./components/YoutubeDownloader";
 
-const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000";
 const MAX_FILES = 10;
 const MAX_FILE_SIZE = 10 * 1024 * 1024;
 
 const TOOLS = {
   merge: {
-    eyebrow: "01 — pick a tool",
-    title: <>Merge PDFs<br />into <span>one clean file.</span></>,
-    sub: "Reorder pages by dragging, then combine. Your files are processed temporarily and returned as one PDF.",
-    tab: "Merge PDF",
-    dropTitle: "Drop PDF files here",
-    spec: ".pdf only · 10 files max · 10MB each",
-    cta: "Merge PDF",
+    title: "Combine PDFs",
+    description: "Join files into one",
+    pageTitle: "Combine PDF files into one document",
+    stepTitle: "Combine your files",
+    dropTitle: "Drag files here",
+    browseLabel: "Choose Files",
+    spec: "PDF · up to 10 files · up to 10 MB each",
+    cta: "Combine & Download",
     accept: "application/pdf",
     allowedTypes: new Set(["application/pdf"]),
+    icon: Files,
+    enabled: true,
   },
+  // split: {
+  //   title: "Split a PDF",
+  //   description: "Pull pages apart",
+  //   pageTitle: "Split a PDF into separate files",
+  //   icon: FileText,
+  //   enabled: false,
+  // },
   images: {
-    eyebrow: "02 — pick a tool",
-    title: <>Turn images<br />into <span>PDF pages.</span></>,
-    sub: "Each image becomes its own PDF page, in the order you add them. JPG, PNG, and WEBP are supported.",
-    tab: "Images to PDF",
-    dropTitle: "Drop JPG, PNG, or WEBP files here",
-    spec: ".jpg .png .webp · 10 files max · 10MB each",
-    cta: "Convert to PDF",
+    title: "Photos to PDF",
+    description: "Turn photos into a PDF",
+    pageTitle: "Turn your photos into a PDF",
+    stepTitle: "Create your PDF",
+    dropTitle: "Drag photos here",
+    browseLabel: "Choose Files",
+    spec: "JPG, PNG or WEBP · up to 10 photos · up to 10 MB each",
+    cta: "Create PDF & Download",
     accept: "image/jpeg,image/png,image/webp",
     allowedTypes: new Set(["image/jpeg", "image/png", "image/webp"]),
+    icon: FileImage,
+    enabled: true,
   },
-  mixed: {
-    eyebrow: "03 — pick a tool",
-    title: <>PDFs and images,<br /><span>one file out.</span></>,
-    sub: "Mix PDFs with photos. ClydeTools converts images into pages and merges everything in your chosen order.",
-    tab: "Mixed Combine",
-    dropTitle: "Drop PDFs and images together",
-    spec: ".pdf .jpg .png .webp · 10 files max · 10MB each",
-    cta: "Create Combined PDF",
-    accept: "application/pdf,image/jpeg,image/png,image/webp",
-    allowedTypes: new Set(["application/pdf", "image/jpeg", "image/png", "image/webp"]),
-  },
+  // compress: {
+  //   title: "Compress a PDF",
+  //   description: "Make the file smaller",
+  //   pageTitle: "Compress a PDF file",
+  //   icon: Minimize2,
+  //   enabled: false,
+  // },
+  // remove: {
+  //   title: "Remove Pages",
+  //   description: "Delete pages you don't need",
+  //   pageTitle: "Remove pages from a PDF",
+  //   icon: Trash2,
+  //   enabled: false,
+  // },
+  youtube: {
+    title: "YouTube Downloader",
+    description: "Download permitted videos as MP4 or MP3",
+    pageTitle: "Download video or audio",
+    icon: Download,
+    enabled: true,
+  }
 };
 
 function validateFile(file, activeTool) {
   const tool = TOOLS[activeTool];
-  if (!tool.allowedTypes.has(file.type)) {
-    return `Unsupported file: ${file.name}`;
-  }
-  if (file.size > MAX_FILE_SIZE) {
-    return `${file.name} is larger than 10MB.`;
-  }
+  if (!tool.allowedTypes?.has(file.type)) return `Unsupported file: ${file.name}`;
+  if (file.size > MAX_FILE_SIZE) return `${file.name} is larger than 10 MB.`;
   return null;
 }
 
@@ -61,10 +99,10 @@ export default function App() {
   const [status, setStatus] = useState("");
   const [error, setError] = useState("");
   const [isProcessing, setIsProcessing] = useState(false);
+  const [mergePhotos, setMergePhotos] = useState(true);
   const fileInputRef = useRef(null);
 
   const tool = TOOLS[activeTool];
-
   const fileSummary = useMemo(() => {
     const pdfCount = files.filter((file) => file.type === "application/pdf").length;
     const imageCount = files.filter((file) => file.type.startsWith("image/")).length;
@@ -72,17 +110,18 @@ export default function App() {
   }, [files]);
 
   function switchTool(key) {
+    if (!TOOLS[key].enabled) return;
     setActiveTool(key);
     setFiles([]);
     setError("");
     setStatus("");
     setIsDragging(false);
+    setMergePhotos(true);
   }
 
   function onFilesSelected(selectedFiles) {
     setError("");
     setStatus("");
-
     const incoming = Array.from(selectedFiles || []);
     const accepted = [];
 
@@ -106,35 +145,20 @@ export default function App() {
 
     setIsProcessing(true);
     setError("");
-    setStatus("Processing your files...");
-
-    const formData = new FormData();
-    files.forEach((file) => formData.append("files", file));
+    setStatus("Processing locally in your browser...");
 
     try {
-      const response = await fetch(`${API_URL}/api/pdf/combine`, {
-        method: "POST",
-        body: formData,
-      });
-
-      if (!response.ok) {
-        const payload = await response.json().catch(() => ({}));
-        throw new Error(payload.message || "Failed to process files.");
+      if (activeTool === "merge") {
+        await mergePdfsInBrowser(files);
+      } else if (activeTool === "images") {
+        await imagesToPdfInBrowser(files, mergePhotos);
+      } else {
+        throw new Error("This tool is not available yet.");
       }
 
-      const blob = await response.blob();
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement("a");
-      link.href = url;
-      link.download = "clydetools-output.pdf";
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-      URL.revokeObjectURL(url);
-
-      setStatus("Downloaded successfully.");
+      setStatus("Downloaded successfully. Your files never left your device.");
     } catch (err) {
-      setError(err.message);
+      setError(err.message || "Failed to process files.");
       setStatus("");
     } finally {
       setIsProcessing(false);
@@ -143,87 +167,180 @@ export default function App() {
 
   return (
     <main className="page-shell">
-      <section className="wrap">
+      <section className="app-card">
         <header className="topbar">
           <div className="brand">
-            <div className="brand-mark" aria-hidden="true" />
+            <div className="brand-mark"><FileText size={18} /></div>
             <div>
               <div className="brand-name">ClydeTools</div>
-              <div className="brand-tag">document utilities</div>
+              <div className="brand-tag">Simple tools for your documents</div>
             </div>
           </div>
 
-          <div className="privacy-pill">
-            <ShieldCheck size={14} />
-            files are processed temporarily
+          <div className="top-actions">
+            <div className="privacy-pill"><ShieldCheck size={13} /> Files never leave your device</div>
+            <div className="font-toggle" aria-label="Text size controls"><span>A</span><strong>A+</strong></div>
           </div>
         </header>
 
-        <section className="hero">
-          <div className="eyebrow">{tool.eyebrow}</div>
-          <h1>{tool.title}</h1>
-          <p>{tool.sub}</p>
-        </section>
+        <div className="divider" />
 
-        <nav className="tool-tabs" aria-label="ClydeTools tools">
-          {Object.entries(TOOLS).map(([key, item], index) => (
-            <button
-              key={key}
-              type="button"
-              className={`tool-tab ${activeTool === key ? "active" : ""}`}
-              onClick={() => switchTool(key)}
-            >
-              <span>{String(index + 1).padStart(2, "0")}</span>
-              {item.tab}
-            </button>
-          ))}
-        </nav>
+        <section className="main-content">
+          <h1>{tool.pageTitle}</h1>
 
-        <section className="workbench">
-          <div className="drop-column">
-            <FileDropzone
-              title={tool.dropTitle}
-              spec={tool.spec}
-              accept={tool.accept}
-              inputRef={fileInputRef}
-              isDragging={isDragging}
-              setIsDragging={setIsDragging}
-              onFilesSelected={onFilesSelected}
-            />
+          <div className="tool-grid" aria-label="Document tools">
+            {Object.entries(TOOLS).map(([key, item]) => {
+              const Icon = item.icon;
+              const selected = activeTool === key;
+              return (
+                <button
+                  key={key}
+                  type="button"
+                  className={`tool-card ${selected ? "selected" : ""} ${!item.enabled ? "disabled" : ""}`}
+                  onClick={() => switchTool(key)}
+                  aria-disabled={!item.enabled}
+                  title={!item.enabled ? "Coming soon" : item.title}
+                >
+                  {selected && <span className="selected-check"><Check size={12} /></span>}
+                  {!item.enabled && <span className="coming-soon">Soon</span>}
+                  <span className="tool-icon"><Icon size={21} /></span>
+                  <strong>{item.title}</strong>
+                  <small>{item.description}</small>
+                </button>
+              );
+            })}
           </div>
 
-          <div className="queue-column">
-            <div className="queue-head">
-              <span>Queue</span>
-              <span>{files.length} {files.length === 1 ? "file" : "files"}</span>
-            </div>
+          {activeTool === "youtube" ? (
+            <YoutubeDownloader />
+          ) : (
+            <>
+              <section className="step-section">
+                <h2><span>2</span> Add your files</h2>
 
-            <FileList files={files} setFiles={setFiles} />
+                <FileDropzone
+                  title={tool.dropTitle}
+                  browseLabel={tool.browseLabel}
+                  spec={tool.spec}
+                  accept={tool.accept}
+                  inputRef={fileInputRef}
+                  isDragging={isDragging}
+                  setIsDragging={setIsDragging}
+                  onFilesSelected={onFilesSelected}
+                />
 
-            <div className="summary-line">
-              {fileSummary.pdfCount} PDF · {fileSummary.imageCount} image
-            </div>
+                {files.length > 0 && (
+                  <div className="file-panel">
+                    <div className="file-panel-head">
+                      <span>
+                        {activeTool === "images"
+                          ? "Your photos"
+                          : "Your files"}
+                      </span>
 
-            {error && <div className="message error">{error}</div>}
-            {status && <div className="message success">{status}</div>}
+                      <span>{files.length} added</span>
+                    </div>
 
-            <div className="cta-row">
-              <button
-                type="button"
-                className="primary-btn"
-                disabled={isProcessing || !files.length}
-                onClick={handleCombine}
-              >
-                {isProcessing ? <Loader2 className="spin" size={16} /> : <Download size={16} />}
-                {isProcessing ? "Processing..." : tool.cta}
-              </button>
-              <span>{files.length ? "ready to process" : "add files to continue"}</span>
-            </div>
-          </div>
+                    <FileList
+                      files={files}
+                      setFiles={setFiles}
+                    />
+                  </div>
+                )}
+              </section>
 
-          <div className="footnote">
-            <b>Why three tools instead of one dropzone:</b> each mode expects a different file type and produces a different result, so the drop target, accepted formats, and button label all change with your selection.
-          </div>
+              <section className="step-section final-step">
+                <h2>
+                  <span>3</span> {tool.stepTitle}
+                </h2>
+
+                {activeTool === "images" && (
+                  <label className="merge-option">
+                    <input
+                      type="checkbox"
+                      checked={mergePhotos}
+                      onChange={(event) =>
+                        setMergePhotos(event.target.checked)
+                      }
+                      disabled={isProcessing}
+                    />
+
+                    <span
+                      className="custom-checkbox"
+                      aria-hidden="true"
+                    >
+                      {mergePhotos && <Check size={13} />}
+                    </span>
+
+                    <span>
+                      <strong>
+                        Merge photos into one PDF
+                      </strong>
+
+                      <small>
+                        Untick to download one PDF for each photo.
+                      </small>
+                    </span>
+                  </label>
+                )}
+
+                <div className="ready-panel">
+                  <div>
+                    <strong>
+                      {files.length
+                        ? "Ready to go"
+                        : "Add files to continue"}
+                    </strong>
+
+                    {files.length > 0 && (
+                      <small>
+                        {fileSummary.pdfCount} PDF ·{" "}
+                        {fileSummary.imageCount} image
+                      </small>
+                    )}
+                  </div>
+
+                  <button
+                    type="button"
+                    className="primary-btn"
+                    disabled={isProcessing || !files.length}
+                    onClick={handleCombine}
+                  >
+                    {isProcessing ? (
+                      <Loader2
+                        className="spin"
+                        size={15}
+                      />
+                    ) : (
+                      <Download size={15} />
+                    )}
+
+                    {isProcessing
+                      ? "Processing..."
+                      : tool.cta}
+                  </button>
+                </div>
+
+                {error && (
+                  <div className="message error">
+                    <X size={14} />
+                    {error}
+                  </div>
+                )}
+
+                {status && (
+                  <div className="message success">
+                    <Check size={14} />
+                    {status}
+                  </div>
+                )}
+              </section>
+            </>
+          )}
+
+          
+
+          
         </section>
       </section>
     </main>
