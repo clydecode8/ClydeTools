@@ -22,6 +22,7 @@ import {
   imagesToPdfInBrowser,
 } from "./services/browserPdf.service.js";
 import YoutubeDownloader from "./components/YoutubeDownloader";
+import { Analytics } from "@vercel/analytics/react";
 
 const MAX_FILES = 10;
 const MAX_FILE_SIZE = 10 * 1024 * 1024;
